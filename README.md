@@ -70,13 +70,13 @@ Contains cnn class along with different parameters.
 ## notebook
 Contains notebooks with different approaches in order to find the best accuracy.
 
-### mix-1
+#### mix-1
 approach1
 
-### mix-2
+#### mix-2
 approach2
 
-### mix-3
+#### mix-3
 approach3
 
 ## output
@@ -88,29 +88,29 @@ Contains saved models autoencoder and cnn
 ## utils
 Contains differnet utility functions
 
-####command_parser
+#### command_parser
 Contains command line argument parsing utility
 
-####config_parser
+#### config_parser
 Contain configration file reading utility
 
-####custom_logging
+#### custom_logging
 Contains custom logging utility
 
-####helper
+#### helper
 Contains different helper functions for training of models
 
-####stack_notification
+#### stack_notification
 Can be used as a notification system, when training will finish, send a message to perticuler slack channel  
 Use your slack ```token='YOUR TOKEN'``` to get notification.
 
-###requirements 
+### requirements 
 Keeps information of all the libraries used.
-###config
+### config
 Keeps all the hyper parameters used in models
-###main
+### main
 Program starter 
-###training
+### training
 Contains different functionalities for training and validation
 
 
