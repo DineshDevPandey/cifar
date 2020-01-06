@@ -167,7 +167,7 @@ class Helper:
         self.loss_func_aen = nn.MSELoss().to(self.device)
 
         # get parameter of cnn to pass to optimizer so that optimizer can modify it
-        parameters_aen = list(self.cnn.parameters())
+        parameters_aen = list(self.aen.parameters())
 
         self.optimizer_aen = torch.optim.Adam(parameters_aen, lr=learning_rate)
 
@@ -292,7 +292,7 @@ class Helper:
                 epoch_val_iter += 1
                 epoch_val_loss_aen += loss.data.item()
 
-                # cnn training
+                # cnn validation
                 encoder_output = encoder_output.to(self.device)
                 output_cnn = self.cnn(encoder_output)
                 label = label.to(self.device)
@@ -305,8 +305,8 @@ class Helper:
                 epoch_val_loss_cnn += loss_cnn.data.item()
 
             print('aen loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
-                                                                               epoch_train_loss_aen/ epoch_train_iter,
-                                                                               epoch_val_loss_aen / epoch_val_iter))
+                                                                               epoch_train_loss_aen,
+                                                                               epoch_val_loss_aen))
             print('cnn loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
                                                                                epoch_train_loss_cnn / epoch_train_iter,
                                                                                epoch_val_loss_cnn / epoch_val_iter))

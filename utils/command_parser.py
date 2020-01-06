@@ -1,7 +1,6 @@
-import sys
 import argparse
-import utils.config_parser
 from utils.config_parser import ConfParser
+
 
 class CommandParser(object):
     def __init__(self):
