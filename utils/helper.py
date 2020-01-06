@@ -9,6 +9,8 @@ from torch.autograd import Variable
 from torchsummary import summary
 from torchvision import datasets
 from torchvision import transforms
+from torch.utils.data import Subset
+from torch.utils.data import Dataset
 from model.auto_encoder import Autoencoder
 from model.cnn_classifier import Classifier
 
@@ -68,10 +70,31 @@ class Helper:
 
         self.check_dir(self.input_path)
 
-        self.cifar_train = datasets.CIFAR10(self.input_path, train=True, download=True, transform=transform_train)
         self.cifar_valid = datasets.CIFAR10(self.input_path, train=False, download=True, transform=transform_valid)
+        self.cifar_train = CifarCustomTrainDataset(self.input_path, transform_train)
+        print("\nAfter applying constraints")
+        print("\ntrain data size : ", len(self.cifar_train))
+        print("valid data size : ", len(self.cifar_valid))
+        print("truck size      : ", len(self.cifar_train.truck_indices))
+        print("deer size       : ", len(self.cifar_train.deer_indices))
+        print("bird size       : ", len(self.cifar_train.bird_indices))
+        print("other size      : ", len(self.cifar_train.other_indices))
+
+        self.log.info("train data size : {}".format(len(self.cifar_train)))
+        self.log.info("valid data size : {}".format(len(self.cifar_valid)))
+        self.log.info("truck size      : {}".format(len(self.cifar_train.truck_indices)))
+        self.log.info("deer size       : {}".format(len(self.cifar_train.deer_indices)))
+        self.log.info("bird size       : {}".format(len(self.cifar_train.bird_indices)))
+        self.log.info("other size      : {}".format(len(self.cifar_train.other_indices)))
 
         self.log.info('data downloading finished')
+
+        print('\ncreating sampler for train data to deal with imbalance dataset')
+        self.log.info('\ncreating sampler for train data to deal with imbalance dataset')
+        self.sampler = ImbalancedDatasetSampler(self.cifar_train)
+
+        print('\nsampler for train data to deal with imbalance dataset is completed')
+        self.log.info('\ncreating sampler for train data to deal with imbalance dataset is completed')
 
         return self.cifar_train, self.cifar_valid
 
@@ -82,8 +105,8 @@ class Helper:
         :return: loader
         """
 
-        self.cifar_train_loader = torch.utils.data.DataLoader(self.cifar_train, batch_size=batch_size, shuffle=True,
-                                                              num_workers=1)
+        self.cifar_train_loader = torch.utils.data.DataLoader(self.cifar_train, batch_size=batch_size, shuffle=False,
+                                                              num_workers=1, sampler=self.sampler)
         self.cifar_valid_loader = torch.utils.data.DataLoader(self.cifar_valid, batch_size=batch_size, shuffle=True,
                                                               num_workers=1)
 
@@ -141,7 +164,7 @@ class Helper:
         """
         # for aen
         # loss function
-        self.loss_func_aen = nn.MSELoss()
+        self.loss_func_aen = nn.MSELoss().to(self.device)
 
         # get parameter of cnn to pass to optimizer so that optimizer can modify it
         parameters_aen = list(self.cnn.parameters())
@@ -150,7 +173,7 @@ class Helper:
 
         # for cnn
         # loss function
-        self.loss_func_cnn = nn.CrossEntropyLoss()
+        self.loss_func_cnn = nn.CrossEntropyLoss().to(self.device)
 
         # get parameter of cnn to pass to optimizer so that optimizer can modify it
         parameters_cnn = list(self.cnn.parameters())
@@ -180,7 +203,7 @@ class Helper:
                 except:
                     pass
 
-            print('GPU FOUND with following specification -')
+            print('\nGPU FOUND with following specification -')
             print(' -Product Name : {}'.format(out_dict.get('Product Name')))
             print(' -Product Brand : {}'.format(out_dict.get('Product Brand')))
             print(' -Used GPU Memory : {}'.format(out_dict.get('Used GPU Memory')))
@@ -225,13 +248,14 @@ class Helper:
 
             for image, label in self.cifar_train_loader:
                 # autoencoder training
-                image = Variable(image).to(self.device)
+                self.optimizer_aen.zero_grad()
+
+                image = image.to(self.device)
                 encoder_output, output = self.aen(image)
 
                 loss_aen = self.loss_func_aen(output, image)
 
-                self.optimizer_aen.zero_grad()
-                loss_aen.backward()
+                loss_aen.backward(retain_graph=True)
                 self.optimizer_aen.step()
 
                 total_train += label.size(0)
@@ -239,12 +263,13 @@ class Helper:
                 epoch_train_loss_aen += loss_aen.data.item()
 
                 # cnn training
-                encoder_output = Variable(encoder_output).to(self.device)
+                self.optimizer_cnn.zero_grad()
+                encoder_output = encoder_output.to(self.device)
                 output_cnn = self.cnn(encoder_output)
 
-                label = Variable(label).to(self.device)
+                label = label.to(self.device)
                 loss_cnn = self.loss_func_cnn(output_cnn, label)
-                self.optimizer_cnn.zero_grad()
+
                 loss_cnn.backward()
                 self.optimizer_cnn.step()
 
@@ -258,7 +283,7 @@ class Helper:
             self.cnn.eval()
 
             for image, label in self.cifar_valid_loader:
-                image = Variable(image).to(self.device)
+                image = image.to(self.device)
 
                 encoder_output, output = self.aen(image)
                 loss = self.loss_func_aen(output, image)
@@ -268,9 +293,9 @@ class Helper:
                 epoch_val_loss_aen += loss.data.item()
 
                 # cnn training
-                encoder_output = Variable(encoder_output).to(self.device)
+                encoder_output = encoder_output.to(self.device)
                 output_cnn = self.cnn(encoder_output)
-                label = Variable(label).to(self.device)
+                label = label.to(self.device)
 
                 _, preds = torch.max(output_cnn, 1)
                 running_val_corrects_cnn += torch.sum(preds == label.data)
@@ -280,8 +305,8 @@ class Helper:
                 epoch_val_loss_cnn += loss_cnn.data.item()
 
             print('aen loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
-                                                                               epoch_train_loss_aen,
-                                                                               epoch_val_loss_aen))
+                                                                               epoch_train_loss_aen/ epoch_train_iter,
+                                                                               epoch_val_loss_aen / epoch_val_iter))
             print('cnn loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
                                                                                epoch_train_loss_cnn / epoch_train_iter,
                                                                                epoch_val_loss_cnn / epoch_val_iter))
@@ -328,7 +353,7 @@ class Helper:
 
         torchvision.utils.save_image(images[:10], self.original_img, nrow=2, scale_each=True)
 
-        images = Variable(images).to(self.device)
+        images = images.to(self.device)
 
         features, output = self.aen(images)
         pred_labels = self.cnn(features)
@@ -366,3 +391,93 @@ class Helper:
         plt.imsave(file_name, image)
 
         return image
+
+
+class CifarCustomTrainDataset(Dataset):
+
+    def __init__(self, input_path, transforms=None):
+        '''
+        Create a dataset with only 50% of bird, deer and truck classes, remaining classes with 100%
+        '''
+        self.transforms = transforms
+        self.cifar10_train = datasets.CIFAR10(input_path, train=True, download=True)
+
+        self.truck_indices, self.deer_indices, self.bird_indices, self.other_indices = [], [], [], []
+        truck_idx, deer_idx, bird_idx = self.cifar10_train.class_to_idx['truck'], self.cifar10_train.class_to_idx[
+            'deer'], self.cifar10_train.class_to_idx['bird']
+
+        for i in range(len(self.cifar10_train)):
+            current_class = self.cifar10_train[i][1]
+            if current_class == truck_idx:
+                self.truck_indices.append(i)
+            elif current_class == deer_idx:
+                self.deer_indices.append(i)
+            elif current_class == bird_idx:
+                self.bird_indices.append(i)
+            else:
+                self.other_indices.append(i)
+
+        self.truck_indices = self.truck_indices[:int(0.5 * len(self.truck_indices))]
+        self.deer_indices = self.deer_indices[:int(0.5 * len(self.deer_indices))]
+        self.bird_indices = self.bird_indices[:int(0.5 * len(self.bird_indices))]
+        self.cifar_10 = Subset(self.cifar10_train,
+                               self.truck_indices + self.deer_indices + self.bird_indices + self.other_indices)
+
+    def __len__(self):
+        return len(self.cifar_10)
+
+    def __getitem__(self, idx):
+        data = self.cifar_10[idx]
+        if self.transforms is not None:
+            data = (self.transforms(data[0]), data[1])
+        return data
+
+        # image counter function for weight calculation
+
+    def get_label(self, idx):
+        data = self.cifar_10[idx]
+        return data[1]
+
+
+class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
+    """Samples elements randomly from a given list of indices for imbalanced dataset
+    Arguments:
+        indices (list, optional): a list of indices
+        num_samples (int, optional): number of samples to draw
+    """
+
+    def __init__(self, dataset, indices=None, num_samples=None):
+
+        # if indices is not provided,
+        # all elements in the dataset will be considered
+        self.indices = list(range(len(dataset))) \
+            if indices is None else indices
+
+        # if num_samples is not provided,
+        # draw `len(indices)` samples in each iteration
+        self.num_samples = len(self.indices) \
+            if num_samples is None else num_samples
+
+        # distribution of classes in the dataset
+        label_to_count = {}
+        for idx in self.indices:
+            label = self._get_label(dataset, idx)
+            if label in label_to_count:
+                label_to_count[label] += 1
+            else:
+                label_to_count[label] = 1
+
+        # weight for each sample
+        weights = [1.0 / label_to_count[self._get_label(dataset, idx)]
+                   for idx in self.indices]
+        self.weights = torch.DoubleTensor(weights)
+
+    def _get_label(self, dataset, idx):
+        return dataset.get_label(idx)
+
+    def __iter__(self):
+        return (self.indices[i] for i in torch.multinomial(
+            self.weights, self.num_samples, replacement=True))
+
+    def __len__(self):
+        return self.num_samples
