@@ -32,16 +32,13 @@ if __name__ == "__main__":
         Start of the program
     """
 
-    # try:
-    #
-    #     t = TicToc()
-    #     t.tic()
-    #
+    t = TicToc()
+    t.tic()
+    '''
+    initialize main class
+    '''
     Cifar()
-    #
-    #     t.toc()
-    #     print('Time elapsed : {} minutes'.format(t.elapsed/60))
-    #
-    # except Exception as e:
-    #     print('Failed to execute program : Exception : {}'.format(e))
-    #     exit(1)
+
+    t.toc()
+    print('Time elapsed : {} minutes'.format(t.elapsed/60))
+
