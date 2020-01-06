@@ -139,7 +139,6 @@ class Helper:
         :param learning_rate:
         :return:
         """
-
         # for aen
         # loss function
         self.loss_func_aen = nn.MSELoss()
@@ -147,7 +146,7 @@ class Helper:
         # get parameter of cnn to pass to optimizer so that optimizer can modify it
         parameters_aen = list(self.cnn.parameters())
 
-        self.optimizer_aen = torch.optim.Adam(parameters_aen, lr=learning_rate, weight_decay=weight_decay)
+        self.optimizer_aen = torch.optim.Adam(parameters_aen, lr=learning_rate)
 
         # for cnn
         # loss function
@@ -225,13 +224,13 @@ class Helper:
             self.cnn.train()
 
             for image, label in self.cifar_train_loader:
-
                 # autoencoder training
                 image = Variable(image).to(self.device)
-                self.optimizer_aen.zero_grad()
                 encoder_output, output = self.aen(image)
 
                 loss_aen = self.loss_func_aen(output, image)
+
+                self.optimizer_aen.zero_grad()
                 loss_aen.backward()
                 self.optimizer_aen.step()
 
@@ -241,11 +240,11 @@ class Helper:
 
                 # cnn training
                 encoder_output = Variable(encoder_output).to(self.device)
-                self.optimizer_cnn.zero_grad()
                 output_cnn = self.cnn(encoder_output)
 
                 label = Variable(label).to(self.device)
                 loss_cnn = self.loss_func_cnn(output_cnn, label)
+                self.optimizer_cnn.zero_grad()
                 loss_cnn.backward()
                 self.optimizer_cnn.step()
 
@@ -280,16 +279,16 @@ class Helper:
 
                 epoch_val_loss_cnn += loss_cnn.data.item()
 
-            print('aen loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(epoch + 1, epoch,
-                                                                                   epoch_train_loss_aen,
-                                                                                   epoch_val_loss_aen))
-            print('cnn loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(epoch + 1, epoch,
-                                                                                   epoch_train_loss_cnn / epoch_train_iter,
-                                                                                   epoch_val_loss_cnn / epoch_val_iter))
-            print('cnn acc  epoch [{}/{}],                             train:{:.2f}%, valid:{:.2f}%'.format(epoch + 1,
-                                                                                                            epoch,
-                                                                                                            running_train_corrects_cnn.float() / total_train * 100,
-                                                                                                            running_val_corrects_cnn.float() / total_val * 100))
+            print('aen loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
+                                                                               epoch_train_loss_aen,
+                                                                               epoch_val_loss_aen))
+            print('cnn loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
+                                                                               epoch_train_loss_cnn / epoch_train_iter,
+                                                                               epoch_val_loss_cnn / epoch_val_iter))
+            print('cnn acc  epoch [{}/{}], train:{:.2f}%, valid:{:.2f}%'.format(i + 1,
+                                                                                epoch,
+                                                                                running_train_corrects_cnn.float() / total_train * 100,
+                                                                                running_val_corrects_cnn.float() / total_val * 100))
 
             train_loss_aen.append(epoch_train_loss_aen / epoch_train_iter)
             valid_loss_aen.append(epoch_val_loss_aen / epoch_val_iter)
@@ -298,7 +297,7 @@ class Helper:
             train_acc_cnn.append(running_train_corrects_cnn.float() / total_train * 100)
             valid_acc_cnn.append(running_val_corrects_cnn.float() / total_val * 100)
 
-            print('-'*60)
+            print('-' * 60)
 
         print('Training finished successfully')
 
@@ -367,4 +366,3 @@ class Helper:
         plt.imsave(file_name, image)
 
         return image
-
