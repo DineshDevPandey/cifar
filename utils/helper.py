@@ -1,8 +1,10 @@
 import os
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.cuda as cuda
+import torchvision
 from torch.autograd import Variable
 from torchsummary import summary
 from torchvision import datasets
@@ -25,6 +27,18 @@ class Helper:
         self.loss_func_aen = None
         self.optimizer_cnn = None
         self.optimizer_aen = None
+
+        self.input_path = os.path.join(os.path.dirname(__file__), '../data/')
+        self.output_path = os.path.join(os.path.dirname(__file__), '../output/')
+        self.pickle_path = os.path.join(os.path.dirname(__file__), '../pickle/')
+
+        self.aen_file = os.path.join(self.pickle_path, 'autoencoder.pkl')
+        self.cnn_file = os.path.join(self.pickle_path, 'classifier.pkl')
+
+        self.original_img = os.path.join(self.output_path, 'original_image.png')
+        self.reconstructed_img = os.path.join(self.output_path, 'reconstructed_image.png')
+
+        self.classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     def load_cifar_data(self):
         """
@@ -52,8 +66,10 @@ class Helper:
         self.log.info('-RandomAffine shear')
         self.log.info('-ColorJitter : brightness, contrast, saturation')
 
-        self.cifar_train = datasets.CIFAR10('data', train=True, download=True, transform=transform_train)
-        self.cifar_valid = datasets.CIFAR10('data', train=False, download=True, transform=transform_valid)
+        self.check_dir(self.input_path)
+
+        self.cifar_train = datasets.CIFAR10(self.input_path, train=True, download=True, transform=transform_train)
+        self.cifar_valid = datasets.CIFAR10(self.input_path, train=False, download=True, transform=transform_valid)
 
         self.log.info('data downloading finished')
 
@@ -78,7 +94,9 @@ class Helper:
         Get device and its specifications
         :return: device
         """
-        self.device = str(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        if str(self.device) == 'cuda:0':
+            self.device_info()
 
     def set_models(self):
         """
@@ -86,12 +104,8 @@ class Helper:
         :return: models
         """
 
-        if self.device == "cuda":
-            self.aen = Autoencoder().to(self.device)
-            self.cnn = Classifier().to(self.device)
-        else:
-            self.aen = Autoencoder()
-            self.cnn = Classifier()
+        self.aen = Autoencoder().to(self.device)
+        self.cnn = Classifier().to(self.device)
 
         self.print_model_summary()
 
@@ -128,7 +142,7 @@ class Helper:
 
         # for aen
         # loss function
-        self.loss_func_aen = nn.MSELoss().to(self.device)
+        self.loss_func_aen = nn.MSELoss()
 
         # get parameter of cnn to pass to optimizer so that optimizer can modify it
         parameters_aen = list(self.cnn.parameters())
@@ -137,47 +151,82 @@ class Helper:
 
         # for cnn
         # loss function
-        self.loss_func_cnn = nn.CrossEntropyLoss().to(self.device)
+        self.loss_func_cnn = nn.CrossEntropyLoss()
 
         # get parameter of cnn to pass to optimizer so that optimizer can modify it
         parameters_cnn = list(self.cnn.parameters())
 
         self.optimizer_cnn = torch.optim.Adam(parameters_cnn, lr=learning_rate, weight_decay=weight_decay)
 
+    def device_info(self):
+        """
+        Parse output of nvidia-smi into a python dictionary.
+        This is very basic!
+        """
+
+        import subprocess
+        try:
+            sp = subprocess.Popen(['nvidia-smi', '-q'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            out_str = sp.communicate()
+            out_list = out_str[0].decode("utf-8").split('\n')
+
+            out_dict = {}
+
+            for item in out_list:
+                try:
+                    key, val = item.split(':')
+                    key, val = key.strip(), val.strip()
+                    out_dict[key] = val
+                except:
+                    pass
+
+            print('GPU FOUND with following specification -')
+            print(' -Product Name : {}'.format(out_dict.get('Product Name')))
+            print(' -Product Brand : {}'.format(out_dict.get('Product Brand')))
+            print(' -Used GPU Memory : {}'.format(out_dict.get('Used GPU Memory')))
+
+            self.log.info('GPU FOUND with following specification -')
+            self.log.info(' -Product Name : {}'.format(out_dict.get('Product Name')))
+            self.log.info(' -Product Brand : {}'.format(out_dict.get('Product Brand')))
+            self.log.info(' -Used GPU Memory : {}'.format(out_dict.get('Used GPU Memory')))
+        except Exception as e:
+            print('Unable to print GPU info : {}'.format(str(e)))
+            self.log.info('Unable to print GPU info : {}'.format(str(e)))
+
     def train(self, epoch):
+
+        print('Training Started ...')
+        self.log.info("Training Started ...")
         train_loss_aen = []
         valid_loss_aen = []
         train_loss_cnn = []
         valid_loss_cnn = []
-
-        # running_loss_history_cnn = []
-        # running_corrects_history_cnn = []
-        # val_running_loss_history_cnn = []
-        # val_running_corrects_history_cnn = []
+        train_acc_cnn = []
+        valid_acc_cnn = []
 
         for i in range(epoch):
 
-            running_loss_aen = 0.0
-            running_corrects_aen = 0.0
-            val_running_loss_aen = 0.0
-            val_running_corrects_aen = 0.0
+            epoch_train_loss_aen = 0.0
+            epoch_train_loss_cnn = 0.0
+            epoch_train_iter = 0
 
-            running_loss_cnn = 0.0
-            running_corrects_cnn = 0.0
-            val_running_loss_cnn = 0.0
-            val_running_corrects_cnn = 0.0
+            epoch_val_loss_aen = 0.0
+            epoch_val_loss_cnn = 0.0
+            epoch_val_iter = 0
 
-            # Let's train the model
-            total_loss_aen = 0.0
-            total_train_iter = 0
+            running_train_corrects_cnn = 0.0
+            running_val_corrects_cnn = 0.0
 
-            total_loss_cnn = 0.0
-            total_iter_cnn = 0
+            total_train = 0
+            total_val = 0
 
             self.aen.train()
             self.cnn.train()
 
             for image, label in self.cifar_train_loader:
+
+                # autoencoder training
                 image = Variable(image).to(self.device)
                 self.optimizer_aen.zero_grad()
                 encoder_output, output = self.aen(image)
@@ -186,37 +235,26 @@ class Helper:
                 loss_aen.backward()
                 self.optimizer_aen.step()
 
-                total_train_iter += 1
-                total_loss_aen += loss_aen.data.item()
+                total_train += label.size(0)
+                epoch_train_iter += 1
+                epoch_train_loss_aen += loss_aen.data.item()
 
-                # ------ cnn
-
+                # cnn training
                 encoder_output = Variable(encoder_output).to(self.device)
-                label = Variable(label).to(self.device)
-
                 self.optimizer_cnn.zero_grad()
                 output_cnn = self.cnn(encoder_output)
 
+                label = Variable(label).to(self.device)
                 loss_cnn = self.loss_func_cnn(output_cnn, label)
                 loss_cnn.backward()
                 self.optimizer_cnn.step()
 
-                total_iter_cnn += 1
-                total_loss_cnn += loss_cnn.data.item()
-
+                # count number of correct predictions
                 _, preds = torch.max(output_cnn, 1)
-                #         running_loss_cnn += loss_cnn.item()
-                running_corrects_cnn += torch.sum(preds == label.data)
+                running_train_corrects_cnn += torch.sum(preds == label.data)
 
-            #     epoch_loss_cnn = running_loss_cnn/len(cifar10_train_loader)
-            epoch_acc_cnn = running_corrects_cnn.float() / len(self.cifar_train_loader)
-            #     running_loss_history_cnn.append(epoch_loss_cnn)
-            #     running_corrects_history_cnn.append(epoch_acc_cnn)
+                epoch_train_loss_cnn += loss_cnn.data.item()
 
-            total_val_loss_aen = 0.0
-            total_val_iter = 0
-            total_val_loss_cnn = 0.0
-            total_val_iter_cnn = 0
             self.aen.eval()
             self.cnn.eval()
 
@@ -226,45 +264,42 @@ class Helper:
                 encoder_output, output = self.aen(image)
                 loss = self.loss_func_aen(output, image)
 
-                total_val_iter += 1
-                total_val_loss_aen += loss.data.item()
+                total_val += label.size(0)
+                epoch_val_iter += 1
+                epoch_val_loss_aen += loss.data.item()
 
+                # cnn training
                 encoder_output = Variable(encoder_output).to(self.device)
+                output_cnn = self.cnn(encoder_output)
                 label = Variable(label).to(self.device)
 
-                output_cnn = self.cnn(encoder_output)
+                _, preds = torch.max(output_cnn, 1)
+                running_val_corrects_cnn += torch.sum(preds == label.data)
 
                 loss_cnn = self.loss_func_cnn(output_cnn, label)
 
-                total_val_iter_cnn += 1
-                total_val_loss_cnn += loss_cnn.data.item()
+                epoch_val_loss_cnn += loss_cnn.data.item()
 
-                _, val_preds = torch.max(output_cnn, 1)
-                #         val_running_loss_cnn += loss_cnn.item()
-                val_running_corrects_cnn += torch.sum(val_preds == label.data)
+            print('aen loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(epoch + 1, epoch,
+                                                                                   epoch_train_loss_aen,
+                                                                                   epoch_val_loss_aen))
+            print('cnn loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(epoch + 1, epoch,
+                                                                                   epoch_train_loss_cnn / epoch_train_iter,
+                                                                                   epoch_val_loss_cnn / epoch_val_iter))
+            print('cnn acc  epoch [{}/{}],                             train:{:.2f}%, valid:{:.2f}%'.format(epoch + 1,
+                                                                                                            epoch,
+                                                                                                            running_train_corrects_cnn.float() / total_train * 100,
+                                                                                                            running_val_corrects_cnn.float() / total_val * 100))
 
-            train_loss_aen.append(total_loss_aen / total_train_iter)
-            valid_loss_aen.append(total_val_loss_aen / total_val_iter)
+            train_loss_aen.append(epoch_train_loss_aen / epoch_train_iter)
+            valid_loss_aen.append(epoch_val_loss_aen / epoch_val_iter)
+            train_loss_cnn.append(epoch_train_loss_cnn / epoch_train_iter)
+            valid_loss_cnn.append(epoch_val_loss_cnn / epoch_val_iter)
+            train_acc_cnn.append(running_train_corrects_cnn.float() / total_train * 100)
+            valid_acc_cnn.append(running_val_corrects_cnn.float() / total_val * 100)
 
-            train_loss_cnn.append(total_loss_cnn / total_train_iter)
-            valid_loss_cnn.append(total_val_loss_cnn / total_val_iter)
+            print('-'*60)
 
-            #     val_epoch_loss_cnn = val_running_loss_cnn/len(self.cifar_valid_loader)
-            val_epoch_acc_cnn = val_running_corrects_cnn.float() / len(self.cifar_valid_loader)
-            #     val_running_loss_history_cnn.append(val_epoch_loss_cnn)
-            #     val_running_corrects_history_cnn.append(val_epoch_acc_cnn)
-            print('epoch :', (i))
-            print('AEN : train loss: {:.4f} '.format(total_loss_aen / len(self.cifar_train_loader)))
-            print('AEN : valid loss: {:.4f} '.format(total_val_loss_aen / len(self.cifar_valid_loader)))
-
-            print('CNN : train loss: {:.4f}, train acc {:.4f} '.format(total_loss_cnn / len(self.cifar_train_loader),
-                                                                       epoch_acc_cnn.item()))
-            print(
-                'CNN : valid loss: {:.4f}, valid acc {:.4f} '.format(total_val_loss_cnn / len(self.cifar_valid_loader),
-                                                                     val_epoch_acc_cnn.item()))
-            print('==========================================================')
-
-            # Let's record the validation loss
         print('Training finished successfully')
 
         # save models
@@ -274,29 +309,62 @@ class Helper:
         print('Saving models...')
         self.log.info('Saving models..')
 
-        if not os.path.exists('pickle'):
-            os.mkdir('pickle')
+        self.check_dir(self.pickle_path)
 
-        torch.save(self.aen.state_dict(), "pickle/autoencoder.pkl")
-        print('Saved autoencoder successfully : pickle/autoencoder.pkl')
-        self.log.info('Saved autoencoder successfully : pickle/autoencoder.pkl')
+        torch.save(self.aen.state_dict(), self.aen_file)
+        print('Saved autoencoder successfully : {}'.format(self.aen_file))
+        self.log.info('Saved autoencoder successfully : {}'.format(self.aen_file))
 
-        torch.save(self.cnn.state_dict(), "pickle/classifier.pkl")
-        print('Saved classifier successfully : pickle/classifier.pkl')
-        self.log.info('Saved classifier successfully : pickle/classifier.pkl')
+        torch.save(self.cnn.state_dict(), self.cnn_file)
+        print('Saved classifier successfully : {}'.format(self.cnn_file))
+        self.log.info('Saved classifier successfully : {}'.format(self.cnn_file))
 
     def validate(self):
         print("Loading checkpoint...")
-        self.aen.load_state_dict(
-            torch.load("../pickle/autoencoder.pkl", map_location=lambda storage, loc: storage))
+        self.aen.load_state_dict(torch.load(self.aen_file, map_location=lambda storage, loc: storage))
         dataiter = iter(self.cifar_valid_loader)
         images, labels = dataiter.next()
-        print('GroundTruth: ', ' '.join('%5s' % classes[labels[j]] for j in range(16)))
-        imshow(torchvision.utils.make_grid(images))
 
-        # images = Variable(images.cuda())
+        self.check_dir(self.output_path)
 
-        decoded_imgs = autoencoder(images)[1]
-        imshow(torchvision.utils.make_grid(decoded_imgs.data))
+        torchvision.utils.save_image(images[:10], self.original_img, nrow=2, scale_each=True)
+
+        images = Variable(images).to(self.device)
+
+        features, output = self.aen(images)
+        pred_labels = self.cnn(features)
+        _, val_preds = torch.max(pred_labels, 1)
+
+        print('\nGroundTruth: ', ' '.join('%10s' % self.classes[labels[j]] for j in range(10)))
+        print('Prediciton : ', ' '.join('%10s' % self.classes[val_preds[j].item()] for j in range(10)))
+
+        torchvision.utils.save_image(output[:10], self.reconstructed_img, nrow=2, scale_each=True)
+        print('')
+
+        print('Input image path : {}'.format(self.original_img))
+        print('Reconstructed image path : {}'.format(self.reconstructed_img))
+        # print("Predicted Labels : {}".format(labels))
+        #
+        self.log.info('Input image path : {}'.format(self.original_img))
+        self.log.info('Reconstructed image path : {}'.format(self.reconstructed_img))
+        # self.log.info("Predicted Labels : {}".format(labels))
 
         exit(0)
+
+    def check_dir(self, path):
+        if not os.path.exists(path):
+            print(path)
+            os.mkdir(path)
+
+    def im_convert(self, file_name, tensor):
+        image = tensor.cpu().clone().detach().numpy()
+        image = image.transpose(1, 2, 0)
+        image = image * np.array((0.5, 0.5, 0.5)) + np.array((0.5, 0.5, 0.5))
+        image = image.clip(0, 1)
+
+        import matplotlib.pyplot as plt
+
+        plt.imsave(file_name, image)
+
+        return image
+
