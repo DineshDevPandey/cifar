@@ -16,6 +16,21 @@
 [![MIT License][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
+## Objective
+Create a combined network of autoencoder and classifier to classify CIFAR10 data.
+
+
+## Constraints
+1. Use only 50% data of classes bird, deer and truck
+2. Use output of encoder part of autoencoder as input of classifier
+
+## Approach
+* Create a custom dataset which reads only 50% of bird, deer and truck, remaining classes 100%
+* Create sampler which assignes weights to different classes to deal with imbalance dataset
+* Use Image augmentation to inhance performance of classifire
+* Use stacked convolutional autoencoder to get most important features of input image
+* Use convolutional neural network to classify images
+* Use encoded output of autoencoder and use as input to CNN
 
 ## Architecture
 <!-- PROJECT LOGO -->
@@ -32,9 +47,6 @@
   * [auto_encoder.py](#auto_encoder)
   * [cnn_classifier.py](#cnn_classifier)
 * [notebook](#notebook)
-  * [mix-1.ipynb](#mix-1)
-  * [mix-2.ipynb](#mix-2)
-  * [mix-3.ipynb](#mix-3)
 * [output](#output)
 * [pickle](#pickle)
 * [utils](#utils)
@@ -70,15 +82,6 @@ Contains cnn class along with different parameters.
 ## notebook
 Contains notebooks with different approaches in order to find the best accuracy.
 
-#### mix-1
-approach1
-
-#### mix-2
-approach2
-
-#### mix-3
-approach3
-
 ## output
 Contains saved autoencoder output
 
@@ -113,13 +116,47 @@ Program starter
 ### training
 Contains different functionalities for training and validation
 
+## Observation
+To achieve better performance in any deep learning model we need to apply series of hyper parameter optimization techniques and 
+find out the best combination of them.
+
+I have tried different approaches. Key points of different approaches along with the notebook link is listed below -
+
+Approach 1:
+1. Parameter setting: batch_size = 100, learning_rate = 0.0001, num_epochs = 60, (L2 regularization)weight_decay=0.001, no image augmentation
+2. Observation : 
+- CNN: accuracy: Train: 93%, Test: ~75%
+- By seeing accuracy graph we can say that model is overfitting. 
+3. Notebook [Mix-7](https://github.com/DineshDevPandey/cifar/tree/master/notebook/mix-7.ipynb)
+
+Approach 2:
+1. Parameter setting: batch_size = 100, learning_rate = 0.0001, num_epochs = 120, (L2 regularization)weight_decay=0.001, with image augmentation
+2. Observation : 
+- CNN: accuracy: Train: ~90%, Test: ~72%
+- By seeing accuracy graph we can say that model is overfitting. 
+3. Notebook [Mix-8](https://github.com/DineshDevPandey/cifar/tree/master/notebook/mix-8.ipynb)
+
+Approach 3:
+1. Parameter setting: batch_size = 128, learning_rate = 0.0001, num_epochs = 120, (L2 regularization)weight_decay=1e-5, with image augmentation
+2. Observation : 
+- CNN: accuracy: Train: ~85%, Test: ~80%
+- By seeing accuracy graph we can say that model is slightly overfitting. 
+3. Notebook [Mix-9](https://github.com/DineshDevPandey/cifar/tree/master/notebook/mix-9.ipynb)
+
+Approach 4:
+1. Parameter setting: batch_size = 256, learning_rate = 0.0001, num_epochs = 120, (L2 regularization)weight_decay=1e-6, with image augmentation
+2. Observation : 
+- CNN: accuracy: Train: ~80%, Test: ~79% for epochs = ~112
+- By seeing accuracy graph we can say that model is able to generalize. 
+3. Notebook [Mix-10](https://github.com/DineshDevPandey/cifar/tree/master/notebook/mix-10.ipynb)
 
 
-##How to use this repository
+
+## How to use this repository
 1. clone the Project
 2. install libraries (`pip install -r requirements.txt`)
 3. get help  (`python main.py --help`)
-4. execute program (`python main.py`) if no arguments passed program will take difault arguments from config file
+4. execute program (`python main.py`) if no arguments passed program will take default arguments from config file
 
 
 <!-- LICENSE -->
