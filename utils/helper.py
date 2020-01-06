@@ -315,6 +315,17 @@ class Helper:
                                                                                 running_train_corrects_cnn.float() / total_train * 100,
                                                                                 running_val_corrects_cnn.float() / total_val * 100))
 
+            self.log.info('aen loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
+                                                                               epoch_train_loss_aen,
+                                                                               epoch_val_loss_aen))
+            self.log.info('cnn loss epoch [{}/{}], train:{:.4f},  valid:{:.4f}'.format(i + 1, epoch,
+                                                                               epoch_train_loss_cnn / epoch_train_iter,
+                                                                               epoch_val_loss_cnn / epoch_val_iter))
+            self.log.info('cnn acc  epoch [{}/{}], train:{:.2f}%, valid:{:.2f}%'.format(i + 1,
+                                                                                epoch,
+                                                                                running_train_corrects_cnn.float() / total_train * 100,
+                                                                                running_val_corrects_cnn.float() / total_val * 100))
+
             train_loss_aen.append(epoch_train_loss_aen / epoch_train_iter)
             valid_loss_aen.append(epoch_val_loss_aen / epoch_val_iter)
             train_loss_cnn.append(epoch_train_loss_cnn / epoch_train_iter)
@@ -325,6 +336,7 @@ class Helper:
             print('-' * 60)
 
         print('Training finished successfully')
+        self.log.info('Training finished successfully')
 
         # save models
         self.save_model()
