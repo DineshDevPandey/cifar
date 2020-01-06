@@ -71,7 +71,7 @@ This directory contains Cifar10 dataset. If data is not downloaded already it wi
 This directory contains log file generated in each run.
 
 ## model
-Contains code for different models.
+Contains models architecture.
 
 #### auto_encoder
 Contains logic for stacked autoencoder class along with encoder and decoder.
@@ -119,6 +119,13 @@ Contains different functionalities for training and validation
 ## Observation
 To achieve better performance in any deep learning model we need to apply series of hyper parameter optimization techniques and 
 find out the best combination of them.
+##### Hyper parameters to tune -
+* learning rate
+* Number of layers in NN
+* Number of nodes in each layers
+* Batch size
+* Number of epochs
+* decay rate etc
 
 I have tried different approaches. Key points of different approaches along with the notebook link is listed below -
 
@@ -150,13 +157,18 @@ Approach 4:
 - By seeing accuracy graph we can say that model is able to generalize. 
 3. Notebook [Mix-10](https://github.com/DineshDevPandey/cifar/tree/master/notebook/mix-10.ipynb)
 
-
-
 ## How to use this repository
 1. clone the Project
 2. install libraries (`pip install -r requirements.txt`)
 3. get help  (`python main.py --help`)
-4. execute program (`python main.py`) if no arguments passed program will take default arguments from config file
+4. execute program (`python main.py --options`) if no arguments passed program will take default arguments from config file
+###### Option list:
+* valid=1  [No training, only validate with previously trained model]
+* epoch=20 [Number of epochs]
+* batchSize [batch size]
+* weightDecay [L2 regularization]
+* learningRate [learning rate]
+* Example: `python main.py --valid=0 --epoch=30 --batchSize=100 --weightDecay=0.00001 --learningRate=0.0001`
 
 
 <!-- LICENSE -->
