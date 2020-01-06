@@ -346,6 +346,7 @@ class Helper:
     def validate(self):
         print("Loading checkpoint...")
         self.aen.load_state_dict(torch.load(self.aen_file, map_location=lambda storage, loc: storage))
+        self.cnn.load_state_dict(torch.load(self.cnn_file, map_location=lambda storage, loc: storage))
         dataiter = iter(self.cifar_valid_loader)
         images, labels = dataiter.next()
 
