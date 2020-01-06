@@ -179,6 +179,9 @@ Distributed under the MIT License.
 <!-- CONTACT -->
 ## Contact
 
+Name: Dinesh Dev Pandey
+
+LinkedIn : [https://www.linkedin.com/in/dinesh-dev-pandey-51317229]
 
 Project Link: [https://github.com/DineshDevPandey/cifar](https://github.com/DineshDevPandey/cifar)
 
